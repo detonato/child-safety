@@ -29,6 +29,11 @@ class ChildSafetyService : Service() {
                 context.startService(intent)
             }
         }
+
+        fun stopService(context: Context) {
+            val intent = Intent(context, ChildSafetyService::class.java)
+            context.stopService(intent)
+        }
     }
 
     override fun onCreate() {

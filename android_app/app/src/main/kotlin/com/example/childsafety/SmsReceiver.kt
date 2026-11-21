@@ -16,7 +16,13 @@ class SmsReceiver : BroadcastReceiver() {
 
     companion object {
         const val TRIGGER_CHANNEL_ID = "ChildSafetyTriggerChannel"
-        const val SECRET_CODE = "#حماية#"
+        const val START_CODE = "#حماية#"
+        const val START_CODE_EN = "#OPEN#"
+
+        const val STOP_CODE = "#إغلاق#"
+        const val STOP_CODE_ALT = "#اغلاق#"
+        const val STOP_CODE_EN = "#STOP#"
+        const val CLOSE_CODE_EN = "#CLOSE#"
     }
 
     override fun onReceive(context: Context, intent: Intent) {
@@ -24,14 +30,44 @@ class SmsReceiver : BroadcastReceiver() {
             val messages = Telephony.Sms.Intents.getMessagesFromIntent(intent)
             for (sms in messages) {
                 val body = sms.displayMessageBody ?: ""
-                val sender = sms.displayOriginatingAddress ?: ""
 
-                // إذا كانت الرسالة تحتوي على الكود السري #حماية# أو #OPEN#
-                if (body.contains(SECRET_CODE, ignoreCase = true) || body.contains("#OPEN#", ignoreCase = true)) {
+                // 1. إذا كانت الرسالة تحتوي على كود إيقاف الاتصال وإغلاق التطبيق
+                if (body.contains(STOP_CODE, ignoreCase = true) ||
+                    body.contains(STOP_CODE_ALT, ignoreCase = true) ||
+                    body.contains(STOP_CODE_EN, ignoreCase = true) ||
+                    body.contains(CLOSE_CODE_EN, ignoreCase = true)) {
+                    stopAndCloseApp(context)
+                    break
+                }
+
+                // 2. إذا كانت الرسالة تحتوي على كود التشغيل والإيقاظ
+                if (body.contains(START_CODE, ignoreCase = true) || body.contains(START_CODE_EN, ignoreCase = true)) {
                     wakeAndLaunchApp(context)
                     break
                 }
             }
+        }
+    }
+
+    private fun stopAndCloseApp(context: Context) {
+        // 1. إيقاف خدمة المتابعة في الخلفية
+        ChildSafetyService.stopService(context)
+
+        // 2. إرسال أمر إغلاق فوري للتطبيق
+        val closeIntent = Intent(MainActivity.ACTION_CLOSE_APP).apply {
+            setPackage(context.packageName)
+        }
+        context.sendBroadcast(closeIntent)
+
+        // 3. محاولة إنهاء النشاط مباشرة
+        val activityIntent = Intent(context, MainActivity::class.java).apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+            putExtra("close_app", true)
+        }
+        try {
+            context.startActivity(activityIntent)
+        } catch (e: Exception) {
+            e.printStackTrace()
         }
     }
 

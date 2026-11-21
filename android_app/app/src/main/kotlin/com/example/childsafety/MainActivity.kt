@@ -3,7 +3,10 @@ package com.example.childsafety
 import android.Manifest
 import android.annotation.SuppressLint
 import android.app.KeyguardManager
+import android.content.BroadcastReceiver
 import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
 import android.content.SharedPreferences
 import android.content.pm.PackageManager
 import android.media.AudioManager
@@ -33,9 +36,50 @@ import androidx.core.content.ContextCompat
 
 class MainActivity : ComponentActivity() {
 
+    companion object {
+        const val ACTION_CLOSE_APP = "com.example.childsafety.CLOSE_APP"
+    }
+
     private lateinit var webView: WebView
     private lateinit var prefs: SharedPreferences
     private val DEFAULT_URL = "https://olive-unaligned-crisping.ngrok-free.dev/child.html"
+
+    private val closeReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            closeAndExit()
+        }
+    }
+
+    private fun closeAndExit() {
+        try {
+            webView.loadUrl("about:blank")
+        } catch (e: Exception) {}
+        finishAffinity()
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        if (intent.getBooleanExtra("close_app", false)) {
+            closeAndExit()
+        }
+    }
+
+    override fun onStart() {
+        super.onStart()
+        val filter = IntentFilter(ACTION_CLOSE_APP)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(closeReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
+        } else {
+            registerReceiver(closeReceiver, filter)
+        }
+    }
+
+    override fun onDestroy() {
+        try {
+            unregisterReceiver(closeReceiver)
+        } catch (e: Exception) {}
+        super.onDestroy()
+    }
 
     private val requestPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
