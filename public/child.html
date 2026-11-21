@@ -129,9 +129,24 @@
     <audio id="remoteAudio" autoplay playsinline></audio>
   </div>
 
-  <script src="/socket.io/socket.io.js"></script>
+  <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
   <script>
-    const socket = io();
+    if (typeof io === 'undefined') {
+      document.write('<script src="/socket.io/socket.io.js"><\/script>');
+    }
+  </script>
+  <script>
+    // تجاوز حظر ngrok في اتصالات Socket.io مع دعم إعادة المحاولة التلقائية
+    const socket = io({
+      extraHeaders: {
+        "ngrok-skip-browser-warning": "1"
+      },
+      transports: ['websocket', 'polling'],
+      reconnection: true,
+      reconnectionAttempts: Infinity,
+      reconnectionDelay: 1000,
+      timeout: 10000
+    });
 
     const iconBox = document.getElementById('iconBox');
     const shieldIcon = document.getElementById('shieldIcon');
@@ -225,7 +240,7 @@
     });
 
     socket.on('connect', () => {
-      log('تم الاتصال بالسيرفر');
+      log('✓ تم الاتصال بالسيرفر بنجاح');
       socket.emit('register', 'child');
 
       if (navigator.getBattery) {
@@ -236,6 +251,14 @@
           socket.emit('update-child-status', { location: { lat: p.coords.latitude, lng: p.coords.longitude } });
         });
       }
+    });
+
+    socket.on('connect_error', (err) => {
+      log('خطأ في الاتصال: ' + (err.message || 'فشل الاتصال'));
+    });
+
+    socket.on('disconnect', (reason) => {
+      log('انقطع الاتصال بالسيرفر (' + reason + ')، جاري إعادة المحاولة...');
     });
 
     socket.on('play-ringtone', () => {
