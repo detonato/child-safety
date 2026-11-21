@@ -1,0 +1,539 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>نظام حماية الطفل - لوحة تحكم ولي الأمر</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: 'Cairo', sans-serif;
+    }
+    body {
+      background-color: #0f172a;
+      color: #f8fafc;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+    header {
+      background: #1e293b;
+      padding: 1rem 1.5rem;
+      border-bottom: 1px solid #334155;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .brand h1 {
+      font-size: 1.3rem;
+      font-weight: 700;
+      color: #38bdf8;
+    }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 14px;
+      border-radius: 9999px;
+      font-size: 0.85rem;
+      font-weight: 600;
+    }
+    .badge.online {
+      background: rgba(34, 197, 94, 0.15);
+      color: #4ade80;
+      border: 1px solid #22c55e;
+    }
+    .badge.offline {
+      background: rgba(239, 68, 68, 0.15);
+      color: #f87171;
+      border: 1px solid #ef4444;
+    }
+    .pulse-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: currentColor;
+      box-shadow: 0 0 8px currentColor;
+    }
+    main {
+      flex: 1;
+      padding: 1.2rem;
+      max-width: 1250px;
+      margin: 0 auto;
+      width: 100%;
+      display: grid;
+      grid-template-columns: 420px 1fr;
+      gap: 1.2rem;
+    }
+    @media (max-width: 950px) {
+      main {
+        grid-template-columns: 1fr;
+      }
+    }
+    .card {
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 16px;
+      padding: 1.2rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+      box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3);
+    }
+    .card-title {
+      font-size: 1.1rem;
+      font-weight: 700;
+      color: #94a3b8;
+      border-bottom: 1px solid #334155;
+      padding-bottom: 0.5rem;
+    }
+    .stats-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: #0f172a;
+      padding: 10px 14px;
+      border-radius: 8px;
+    }
+    .stat-label {
+      color: #94a3b8;
+      font-size: 0.9rem;
+    }
+    .stat-value {
+      font-weight: 700;
+      font-size: 0.95rem;
+      color: #f1f5f9;
+    }
+    .btn-call {
+      background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+      color: white;
+      border: none;
+      padding: 12px;
+      border-radius: 12px;
+      font-size: 1rem;
+      font-weight: 700;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      box-shadow: 0 4px 15px rgba(16, 185, 129, 0.4);
+    }
+    .btn-video {
+      background: linear-gradient(135deg, #8b5cf6 0%, #6d28d9 100%);
+      color: white;
+      border: none;
+      padding: 12px;
+      border-radius: 12px;
+      font-size: 1rem;
+      font-weight: 700;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      box-shadow: 0 4px 15px rgba(139, 92, 246, 0.4);
+    }
+    .btn-switch-cam {
+      background: #0284c7;
+      color: white;
+      border: none;
+      padding: 10px;
+      border-radius: 10px;
+      font-size: 0.9rem;
+      font-weight: 700;
+      cursor: pointer;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+    }
+    .btn-ring {
+      background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+      color: white;
+      border: none;
+      padding: 11px;
+      border-radius: 12px;
+      font-size: 0.95rem;
+      font-weight: 700;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+    .btn-hangup {
+      background: #ef4444;
+      color: white;
+      border: none;
+      padding: 12px;
+      border-radius: 12px;
+      font-size: 1rem;
+      font-weight: 700;
+      cursor: pointer;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+    .call-active-box {
+      display: none;
+      background: rgba(16, 185, 129, 0.15);
+      border: 1px solid #10b981;
+      padding: 10px;
+      border-radius: 10px;
+      text-align: center;
+      color: #34d399;
+      font-weight: 700;
+      animation: pulse 1.5s infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.7; }
+    }
+    #remoteVideo {
+      width: 100%;
+      height: 240px;
+      background: #000;
+      border-radius: 12px;
+      display: none;
+      object-fit: cover;
+      border: 2px solid #8b5cf6;
+    }
+    #map {
+      width: 100%;
+      height: 100%;
+      min-height: 400px;
+      border-radius: 12px;
+      border: 1px solid #334155;
+    }
+    .log-box {
+      background: #0f172a;
+      border: 1px solid #334155;
+      border-radius: 8px;
+      padding: 10px;
+      font-size: 0.8rem;
+      color: #94a3b8;
+      max-height: 100px;
+      overflow-y: auto;
+      line-height: 1.5;
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="brand">
+      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" stroke-width="2">
+        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+      </svg>
+      <h1>نظام حماية الطفل - لوحة تحكم ولي الأمر</h1>
+    </div>
+    <div style="display: flex; align-items: center; gap: 8px;">
+      <a href="/ChildSafety.apk" download style="background: #0284c7; color: white; text-decoration: none; padding: 6px 12px; border-radius: 9999px; font-size: 0.8rem; font-weight: 700;">
+        📥 تحميل APK
+      </a>
+      <div id="statusBadge" class="badge offline">
+        <span class="pulse-dot"></span>
+        <span id="statusText">هاتف الطفل: غير متصل</span>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <div class="card">
+      <div class="card-title">الاتصال المباشر والصوت والكاميرا</div>
+
+      <div class="stats-row">
+        <span class="stat-label">نسبة البطارية:</span>
+        <span class="stat-value" id="batteryVal">-- %</span>
+      </div>
+
+      <div class="stats-row">
+        <span class="stat-label">حالة الاتصال:</span>
+        <span class="stat-value" id="audioStateVal" style="color: #38bdf8;">في الانتظار</span>
+      </div>
+
+      <div id="callActiveBox" class="call-active-box">
+        🔊 الاتصال نشط الآن.. مكبر الصوت مفتوح
+      </div>
+
+      <!-- شاشة عرض فيديو الكاميرا المباشرة -->
+      <video id="remoteVideo" autoplay playsinline></video>
+
+      <button id="btnSwitchCam" class="btn-switch-cam">
+        🔄 تبديل الكاميرا (أمامية / خلفية)
+      </button>
+
+      <!-- زر اتصال صوتي -->
+      <button id="btnCall" class="btn-call">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/>
+        </svg>
+        📞 بدء اتصال صوتي فقط
+      </button>
+
+      <!-- زر اتصال فيديو وكاميرا -->
+      <button id="btnVideoCall" class="btn-video">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polygon points="23 7 16 12 23 17 23 7"></polygon>
+          <rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect>
+        </svg>
+        📹 فتح الكاميرا المباشرة (صوت وفيديو)
+      </button>
+
+      <!-- زر إطلاق الرنين -->
+      <button id="btnRing" class="btn-ring">
+        🔔 إطلاق جرس رنين لتنبيه الطفل وتجربة الصوت
+      </button>
+
+      <button id="btnHangup" class="btn-hangup">
+        إنهاء المكالمة
+      </button>
+
+      <div class="log-box" id="logBox">
+        <div>> السجل: متصل بالنظام...</div>
+      </div>
+
+      <audio id="remoteAudio" autoplay playsinline></audio>
+    </div>
+
+    <div class="card">
+      <div class="card-title">موقع الطفل المباشر على الخريطة</div>
+      <div id="map"></div>
+    </div>
+  </main>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script>
+    const socket = io();
+
+    const statusBadge = document.getElementById('statusBadge');
+    const statusText = document.getElementById('statusText');
+    const batteryVal = document.getElementById('batteryVal');
+    const audioStateVal = document.getElementById('audioStateVal');
+    const btnCall = document.getElementById('btnCall');
+    const btnVideoCall = document.getElementById('btnVideoCall');
+    const btnSwitchCam = document.getElementById('btnSwitchCam');
+    const btnRing = document.getElementById('btnRing');
+    const btnHangup = document.getElementById('btnHangup');
+    const callActiveBox = document.getElementById('callActiveBox');
+    const logBox = document.getElementById('logBox');
+    const remoteAudio = document.getElementById('remoteAudio');
+    const remoteVideo = document.getElementById('remoteVideo');
+
+    function log(msg) {
+      const line = document.createElement('div');
+      line.innerText = `> ${msg}`;
+      logBox.appendChild(line);
+      logBox.scrollTop = logBox.scrollHeight;
+    }
+
+    const map = L.map('map').setView([30.0444, 31.2357], 13);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+    let childMarker = null;
+
+    socket.emit('register', 'parent');
+
+    socket.on('child-data-update', (data) => {
+      if (data.online) {
+        statusBadge.className = 'badge online';
+        statusText.innerText = 'هاتف الطفل: متصل الآن';
+      } else {
+        statusBadge.className = 'badge offline';
+        statusText.innerText = 'هاتف الطفل: غير متصل';
+      }
+      if (data.battery !== null) batteryVal.innerText = `${data.battery}%`;
+      if (data.location && data.location.lat && data.location.lng) {
+        const { lat, lng } = data.location;
+        if (!childMarker) {
+          childMarker = L.marker([lat, lng]).addTo(map).bindPopup('موقع الطفل').openPopup();
+          map.setView([lat, lng], 15);
+        } else {
+          childMarker.setLatLng([lat, lng]);
+        }
+      }
+    });
+
+    socket.on('log-message', msg => log(msg));
+
+    btnRing.addEventListener('click', () => {
+      log('تم إرسال أمر الرنين لهاتف الطفل...');
+      socket.emit('ring-child');
+    });
+
+    btnSwitchCam.addEventListener('click', () => {
+      log('طلب تبديل الكاميرا (أمامية/خلفية)...');
+      socket.emit('switch-camera');
+    });
+
+    // ============================================
+    // الاتصال WebRTC (صوت أو فيديو)
+    // ============================================
+    let peerConnection = null;
+    let localStream = null;
+    let candidateQueue = [];
+    let isRemoteDescriptionSet = false;
+
+    const rtcConfig = {
+      iceServers: [
+        { urls: 'stun:stun.l.google.com:19302' },
+        { urls: 'stun:stun1.l.google.com:19302' },
+        { urls: 'stun:stun.relay.metered.ca:80' },
+        {
+          urls: 'turn:standard.relay.metered.ca:80',
+          username: 'openrelayproject',
+          credential: 'openrelayproject'
+        },
+        {
+          urls: 'turn:standard.relay.metered.ca:443',
+          username: 'openrelayproject',
+          credential: 'openrelayproject'
+        },
+        {
+          urls: 'turn:standard.relay.metered.ca:443?transport=tcp',
+          username: 'openrelayproject',
+          credential: 'openrelayproject'
+        }
+      ]
+    };
+
+    async function startCall(withVideo = false) {
+      try {
+        log(`جاري تجهيز الميكروفون والاتصال [${withVideo ? 'صوت وفيديو' : 'صوت فقط'}]...`);
+        btnCall.disabled = true;
+        btnVideoCall.disabled = true;
+
+        localStream = await navigator.mediaDevices.getUserMedia({
+          audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+          video: false
+        });
+
+        if (peerConnection) peerConnection.close();
+        candidateQueue = [];
+        isRemoteDescriptionSet = false;
+
+        peerConnection = new RTCPeerConnection(rtcConfig);
+
+        localStream.getTracks().forEach(t => peerConnection.addTrack(t, localStream));
+
+        peerConnection.ontrack = (event) => {
+          log(`تم استلام تيار [${event.track.kind}] من الطفل!`);
+          if (event.track.kind === 'video') {
+            remoteVideo.style.display = 'block';
+            remoteVideo.srcObject = event.streams[0];
+            btnSwitchCam.style.display = 'flex';
+          } else if (event.track.kind === 'audio') {
+            remoteAudio.srcObject = event.streams[0];
+            remoteAudio.play().catch(e => console.warn(e));
+          }
+          audioStateVal.innerText = withVideo ? 'بث الصوت والكاميرا نشط ✓' : 'الصوت متصل ✓';
+        };
+
+        peerConnection.onicecandidate = (event) => {
+          if (event.candidate) {
+            socket.emit('ice-candidate', { candidate: event.candidate });
+          }
+        };
+
+        peerConnection.oniceconnectionstatechange = () => {
+          log(`حالة الاتصال: ${peerConnection.iceConnectionState}`);
+        };
+
+        const offer = await peerConnection.createOffer({
+          offerToReceiveAudio: true,
+          offerToReceiveVideo: withVideo
+        });
+        await peerConnection.setLocalDescription(offer);
+
+        socket.emit('call-child', { offer: offer, withVideo: withVideo });
+        log('تم إرسال إشارة الاتصال لهاتف الطفل...');
+
+      } catch (err) {
+        log(`خطأ: ${err.message}`);
+        btnCall.disabled = false;
+        btnVideoCall.disabled = false;
+        alert('يرجى التأكد من السماح للمتصفح بالوصول إلى الميكروفون');
+      }
+    }
+
+    btnCall.addEventListener('click', () => startCall(false));
+    btnVideoCall.addEventListener('click', () => startCall(true));
+
+    socket.on('call-accepted', async (data) => {
+      log('هاتف الطفل قبل المكالمة تلقائياً وفتح السبيكر والكاميرا!');
+      await peerConnection.setRemoteDescription(new RTCSessionDescription(data.answer));
+      isRemoteDescriptionSet = true;
+
+      while (candidateQueue.length > 0) {
+        const c = candidateQueue.shift();
+        await peerConnection.addIceCandidate(new RTCIceCandidate(c));
+      }
+
+      btnCall.style.display = 'none';
+      btnVideoCall.style.display = 'none';
+      btnRing.style.display = 'none';
+      btnHangup.style.display = 'flex';
+      callActiveBox.style.display = 'block';
+    });
+
+    socket.on('ice-candidate', async (data) => {
+      if (data.candidate) {
+        if (peerConnection && isRemoteDescriptionSet) {
+          try {
+            await peerConnection.addIceCandidate(new RTCIceCandidate(data.candidate));
+          } catch(e) {}
+        } else {
+          candidateQueue.push(data.candidate);
+        }
+      }
+    });
+
+    socket.on('call-ended', () => {
+      endCallUI();
+    });
+
+    btnHangup.addEventListener('click', () => {
+      socket.emit('hangup');
+      endCallUI();
+    });
+
+    function endCallUI() {
+      if (peerConnection) {
+        peerConnection.close();
+        peerConnection = null;
+      }
+      candidateQueue = [];
+      isRemoteDescriptionSet = false;
+      if (localStream) {
+        localStream.getTracks().forEach(t => t.stop());
+        localStream = null;
+      }
+      remoteVideo.style.display = 'none';
+      remoteVideo.srcObject = null;
+      btnSwitchCam.style.display = 'none';
+      btnCall.style.display = 'flex';
+      btnCall.disabled = false;
+      btnVideoCall.style.display = 'flex';
+      btnVideoCall.disabled = false;
+      btnRing.style.display = 'flex';
+      btnHangup.style.display = 'none';
+      callActiveBox.style.display = 'none';
+      audioStateVal.innerText = 'تم إنهاء المكالمة';
+      log('تم إنهاء المكالمة.');
+    }
+  </script>
+</body>
+</html>

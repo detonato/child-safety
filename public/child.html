@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>هاتف الطفل - نظام الحماية</title>
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@600;700;800&display=swap" rel="stylesheet">
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: 'Cairo', sans-serif;
+    }
+    body {
+      background-color: #022c22;
+      color: #f0fdf4;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+      text-align: center;
+    }
+    .container {
+      background: #064e3b;
+      padding: 1.8rem 1.4rem;
+      border-radius: 24px;
+      border: 2px solid #059669;
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+      max-width: 420px;
+      width: 100%;
+    }
+    .icon-box {
+      width: 80px;
+      height: 80px;
+      background: #10b981;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 1rem;
+      box-shadow: 0 0 20px rgba(16, 185, 129, 0.5);
+      transition: all 0.3s;
+    }
+    .icon-box.calling {
+      background: #ef4444;
+      animation: pulse 1s infinite;
+      box-shadow: 0 0 35px rgba(239, 68, 68, 0.8);
+    }
+    @keyframes pulse {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.08); }
+    }
+    h2 {
+      font-size: 1.4rem;
+      margin-bottom: 0.4rem;
+    }
+    p {
+      color: #a7f3d0;
+      font-size: 0.9rem;
+      margin-bottom: 1rem;
+    }
+    .btn-action {
+      background: #10b981;
+      color: white;
+      border: none;
+      padding: 14px 18px;
+      border-radius: 12px;
+      font-size: 1rem;
+      font-weight: 700;
+      cursor: pointer;
+      width: 100%;
+      margin-bottom: 0.8rem;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+    }
+    .log-box {
+      background: #022c22;
+      border: 1px solid #047857;
+      border-radius: 10px;
+      padding: 10px;
+      font-size: 0.82rem;
+      color: #6ee7b7;
+      text-align: right;
+      max-height: 120px;
+      overflow-y: auto;
+      margin-top: 10px;
+      line-height: 1.5;
+    }
+    #localVideoPreview {
+      width: 100%;
+      height: 180px;
+      background: #000;
+      border-radius: 12px;
+      margin-top: 10px;
+      object-fit: cover;
+      display: none;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <div id="iconBox" class="icon-box">
+      <svg id="shieldIcon" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5">
+        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+      </svg>
+      <svg id="speakerIcon" style="display:none;" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5">
+        <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+        <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+      </svg>
+    </div>
+
+    <h2 id="mainTitle">وضع حماية الطفل نشط</h2>
+    <p id="subTitle">الهاتف متصل بولي الأمر وجاهز لاستقبال الاتصال الصوتي والكاميرا المباشرة.</p>
+
+    <!-- زر تفعيل السماعات والميكروفون لفك حظر المتصفح -->
+    <button id="btnActivate" class="btn-action">
+      🔊 اضغط هنا لمرة واحدة لتفعيل الصوت والميكروفون والكاميرا
+    </button>
+
+    <video id="localVideoPreview" autoplay muted playsinline></video>
+
+    <div class="log-box" id="logBox">
+      <div>> جاري تهيئة الاتصال...</div>
+    </div>
+
+    <audio id="remoteAudio" autoplay playsinline></audio>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+    const socket = io();
+
+    const iconBox = document.getElementById('iconBox');
+    const shieldIcon = document.getElementById('shieldIcon');
+    const speakerIcon = document.getElementById('speakerIcon');
+    const mainTitle = document.getElementById('mainTitle');
+    const subTitle = document.getElementById('subTitle');
+    const btnActivate = document.getElementById('btnActivate');
+    const logBox = document.getElementById('logBox');
+    const localVideoPreview = document.getElementById('localVideoPreview');
+    const remoteAudio = document.getElementById('remoteAudio');
+
+    function log(msg) {
+      const line = document.createElement('div');
+      line.innerText = `> ${msg}`;
+      logBox.appendChild(line);
+      logBox.scrollTop = logBox.scrollHeight;
+    }
+
+    let audioContext = null;
+    let localStream = null;
+    let peerConnection = null;
+    let candidateQueue = [];
+    let isRemoteDescriptionSet = false;
+    let currentFacingMode = 'environment'; // الكاميرا الخلفية افتراضياً لرؤية المحيط
+
+    const rtcConfig = {
+      iceServers: [
+        { urls: 'stun:stun.l.google.com:19302' },
+        { urls: 'stun:stun1.l.google.com:19302' },
+        { urls: 'stun:stun.relay.metered.ca:80' },
+        {
+          urls: 'turn:standard.relay.metered.ca:80',
+          username: 'openrelayproject',
+          credential: 'openrelayproject'
+        },
+        {
+          urls: 'turn:standard.relay.metered.ca:443',
+          username: 'openrelayproject',
+          credential: 'openrelayproject'
+        },
+        {
+          urls: 'turn:standard.relay.metered.ca:443?transport=tcp',
+          username: 'openrelayproject',
+          credential: 'openrelayproject'
+        }
+      ]
+    };
+
+    function playBeep(freq = 880, duration = 0.3) {
+      try {
+        if (!audioContext) audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        if (audioContext.state === 'suspended') audioContext.resume();
+        const osc = audioContext.createOscillator();
+        const gain = audioContext.createGain();
+        osc.connect(gain);
+        gain.connect(audioContext.destination);
+        osc.frequency.value = freq;
+        gain.gain.setValueAtTime(0.8, audioContext.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + duration);
+        osc.start();
+        osc.stop(audioContext.currentTime + duration);
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    function playAlarm() {
+      playBeep(900, 0.2);
+      setTimeout(() => playBeep(1200, 0.3), 220);
+      setTimeout(() => playBeep(900, 0.2), 550);
+      setTimeout(() => playBeep(1200, 0.4), 770);
+    }
+
+    btnActivate.addEventListener('click', async () => {
+      try {
+        if (!audioContext) audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        if (audioContext.state === 'suspended') await audioContext.resume();
+        playAlarm();
+
+        localStream = await navigator.mediaDevices.getUserMedia({
+          audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+          video: false
+        });
+
+        btnActivate.style.background = '#047857';
+        btnActivate.innerText = '✓ النظام جاهز للاتصال والصوت والكاميرا';
+        log('تم تجهيز الصلاحيات بنجاح!');
+      } catch (e) {
+        log('يرجى الضغط على سماح (Allow) للأذونات');
+      }
+    });
+
+    socket.on('connect', () => {
+      log('تم الاتصال بالسيرفر');
+      socket.emit('register', 'child');
+
+      if (navigator.getBattery) {
+        navigator.getBattery().then(b => socket.emit('update-child-status', { battery: Math.round(b.level * 100) }));
+      }
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(p => {
+          socket.emit('update-child-status', { location: { lat: p.coords.latitude, lng: p.coords.longitude } });
+        });
+      }
+    });
+
+    socket.on('play-ringtone', () => {
+      log('الأب طلب تشغيل جرس التنبيه!');
+      playAlarm();
+    });
+
+    // ============================================
+    // الرد التلقائي الفوري (صوت أو صوت + كاميرا)
+    // ============================================
+    socket.on('incoming-call', async (data) => {
+      const withVideo = !!data.withVideo;
+      log(`وصل اتصال من الأب [${withVideo ? 'صوت وفيديو' : 'صوت فقط'}]! جاري فتح الخط تلقائياً...`);
+      playBeep(700, 0.2);
+
+      iconBox.className = 'icon-box calling';
+      shieldIcon.style.display = 'none';
+      speakerIcon.style.display = 'block';
+      mainTitle.innerText = 'الأب يتحدث معك الآن!';
+      subTitle.innerText = withVideo ? 'تم فتح الكاميرا المباشرة ومكبر الصوت للأب.' : 'الخط مفتوح على مكبر الصوت.';
+
+      try {
+        // إذا كان هناك بث سابق نوقفه
+        if (localStream) {
+          localStream.getTracks().forEach(t => t.stop());
+        }
+
+        // طلب الصوت + الكاميرا إذا طلب الأب فيديو
+        const constraints = {
+          audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+          video: withVideo ? { facingMode: currentFacingMode, width: { ideal: 640 }, height: { ideal: 480 } } : false
+        };
+
+        localStream = await navigator.mediaDevices.getUserMedia(constraints);
+
+        if (withVideo) {
+          localVideoPreview.style.display = 'block';
+          localVideoPreview.srcObject = localStream;
+        } else {
+          localVideoPreview.style.display = 'none';
+        }
+
+        if (peerConnection) peerConnection.close();
+        candidateQueue = [];
+        isRemoteDescriptionSet = false;
+
+        peerConnection = new RTCPeerConnection(rtcConfig);
+
+        localStream.getTracks().forEach(t => peerConnection.addTrack(t, localStream));
+
+        peerConnection.ontrack = (event) => {
+          log('تم استلام تيار صوت الأب!');
+          remoteAudio.srcObject = event.streams[0];
+          remoteAudio.play().catch(e => console.warn(e));
+        };
+
+        peerConnection.onicecandidate = (event) => {
+          if (event.candidate) {
+            socket.emit('ice-candidate', { candidate: event.candidate });
+          }
+        };
+
+        peerConnection.oniceconnectionstatechange = () => {
+          log(`حالة الاتصال: ${peerConnection.iceConnectionState}`);
+        };
+
+        await peerConnection.setRemoteDescription(new RTCSessionDescription(data.offer));
+        isRemoteDescriptionSet = true;
+
+        while (candidateQueue.length > 0) {
+          const c = candidateQueue.shift();
+          await peerConnection.addIceCandidate(new RTCIceCandidate(c));
+        }
+
+        const answer = await peerConnection.createAnswer();
+        await peerConnection.setLocalDescription(answer);
+
+        socket.emit('accept-call', { answer: answer });
+        log('تم فتح الخط والرد تلقائياً بنجاح!');
+
+      } catch (err) {
+        log(`خطأ: ${err.message}`);
+      }
+    });
+
+    // تبديل الكاميرا (أمامية / خلفية) بناءً على طلب الأب
+    socket.on('switch-camera', async () => {
+      currentFacingMode = (currentFacingMode === 'environment') ? 'user' : 'environment';
+      log(`جاري تبديل الكاميرا إلى: ${currentFacingMode === 'user' ? 'الأمامية' : 'الخلفية'}`);
+
+      if (localStream && peerConnection) {
+        try {
+          const newVideoStream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: currentFacingMode, width: { ideal: 640 }, height: { ideal: 480 } }
+          });
+          const newTrack = newVideoStream.getVideoTracks()[0];
+          const sender = peerConnection.getSenders().find(s => s.track && s.track.kind === 'video');
+
+          if (sender) {
+            await sender.replaceTrack(newTrack);
+            const oldTrack = localStream.getVideoTracks()[0];
+            if (oldTrack) oldTrack.stop();
+            localStream.removeTrack(oldTrack);
+            localStream.addTrack(newTrack);
+            localVideoPreview.srcObject = localStream;
+            log('تم تبديل الكاميرا بنجاح!');
+          }
+        } catch (e) {
+          log(`تعذر تبديل الكاميرا: ${e.message}`);
+        }
+      }
+    });
+
+    socket.on('ice-candidate', async (data) => {
+      if (data.candidate) {
+        if (peerConnection && isRemoteDescriptionSet) {
+          try {
+            await peerConnection.addIceCandidate(new RTCIceCandidate(data.candidate));
+          } catch(e) {}
+        } else {
+          candidateQueue.push(data.candidate);
+        }
+      }
+    });
+
+    socket.on('call-ended', () => {
+      if (peerConnection) {
+        peerConnection.close();
+        peerConnection = null;
+      }
+      if (localStream) {
+        localStream.getTracks().forEach(t => t.stop());
+        localStream = null;
+      }
+      localVideoPreview.style.display = 'none';
+      iconBox.className = 'icon-box';
+      shieldIcon.style.display = 'block';
+      speakerIcon.style.display = 'none';
+      mainTitle.innerText = 'وضع حماية الطفل نشط';
+      subTitle.innerText = 'الهاتف متصل بولي الأمر والرد التلقائي مفعل.';
+      log('تم إنهاء المكالمة.');
+    });
+  </script>
+</body>
+</html>
